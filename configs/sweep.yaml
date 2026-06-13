@@ -1,0 +1,48 @@
+# Weights & Biases sweep config for vanilla Whisper fine-tuning.
+#
+# Launches a small hyperparam sweep over learning rate, scheduler, and seed
+# for one language. Reports best validation WER per run; W&B's UI shows
+# the winning combination.
+#
+# Run with:
+#   # 1) one-time sweep registration (returns a sweep ID)
+#   wandb sweep configs/sweep.yaml
+#
+#   # 2) launch N agents that pull configs from the sweep and run them
+#   wandb agent <user>/<project>/<sweep-id>   # repeat for as many parallel workers as you have GPUs
+#
+# Each agent process invokes the `command` below, with the swept hyperparams
+# injected as flags (W&B handles the substitution).
+
+program: src/train.py
+method: bayes                    # bayes is sample-efficient; switch to grid for full coverage
+metric:
+  name: eval/wer
+  goal: minimize
+
+# Knobs being swept
+parameters:
+  learning_rate:
+    distribution: log_uniform_values
+    min: 1.0e-6
+    max: 3.0e-5
+  scheduler:
+    values: [cosine, linear, exponential]
+  encoder_lr_ratio:
+    values: [0.1, 0.3, 1.0]      # 1.0 = no enc/dec split; 0.3 = paper default
+  seed:
+    values: [42, 1337, 2024]
+
+# Knobs held fixed (passed to every agent run)
+command:
+  - python
+  - ${program}
+  - --lang=spanish
+  - --fleurs-code=es_419
+  - --whisper-lang=spanish
+  - --model=openai/whisper-base
+  - --output-dir=runs/sweep/spanish-${env}-${args}     # W&B substitutes ${args} per run
+  - --max-epochs=2                                      # shorter for sweep agents
+  - --patience=2
+  - --wandb-project=whisper-vanilla-sweep
+  - ${args_no_hyphens}

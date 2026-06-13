@@ -1,0 +1,28 @@
+# Example training config for vanilla Whisper fine-tuning on Spanish.
+#
+# These YAMLs are not directly loaded by train.py — they're a structured place
+# to record the flags for one run. Copy the values into a `python src/train.py ...`
+# invocation, or read them with a small wrapper.
+#
+# Whisper-base (fast iteration; ~30-60 min on one consumer GPU):
+lang: spanish
+fleurs_code: es_419
+whisper_lang: spanish
+model: openai/whisper-base
+output_dir: runs/spanish-base
+
+learning_rate: 1.0e-5
+encoder_lr_ratio: 0.3
+weight_decay: 4.0e-5
+batch_size: 2
+grad_accum_steps: 16
+warmup_steps: 150
+scheduler: cosine
+
+max_epochs: 3
+eval_steps: 100
+patience: 3
+seed: 42
+
+wandb_project: whisper-vanilla-spanish
+wandb_tags: [vanilla, base, spanish]

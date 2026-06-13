@@ -1,0 +1,71 @@
+# Nautilus k8s Job for one W&B sweep agent.
+#
+# Submit ONE of these per parallel sweep worker you want. Each pod will pull
+# configs from the W&B sweep controller and run them sequentially until the
+# sweep finishes (or the pod hits its max runtime).
+#
+# Setup once on your laptop:
+#   wandb sweep configs/sweep.yaml
+#   # → prints "wandb agent <user>/<project>/<sweep-id>"
+#
+# Then for each parallel worker:
+#   SWEEP_ID=<user>/<project>/<sweep-id>
+#   sed "s|SWEEP_ID_PLACEHOLDER|$SWEEP_ID|" nautilus/sweep-agent-job.yaml | \
+#     sed "s|agent-NAME|agent-$(date +%s%N | tail -c 6)|" | \
+#     kubectl apply -f -
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: whisper-vft-sweep-agent-NAME       # EDIT ME — must be unique per agent
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: agent
+          image: gitlab-registry.nautilus.optiputer.net/YOUR-GROUP/whisper-vanilla:latest   # EDIT ME
+          imagePullPolicy: Always
+
+          # `wandb agent` long-polls the sweep controller for configs and
+          # invokes the program (src/train.py) with sampled hyperparams.
+          command: ["wandb", "agent", "SWEEP_ID_PLACEHOLDER"]                                # EDIT ME
+
+          env:
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials
+                  key: api-key
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-credentials
+                  key: token
+                  optional: true
+
+          resources:
+            requests:
+              memory: "16Gi"
+              cpu:    "4"
+              nvidia.com/gpu: "1"
+            limits:
+              memory: "24Gi"
+              cpu:    "8"
+              nvidia.com/gpu: "1"
+
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /cache/hf
+            - name: output
+              mountPath: /output
+
+      volumes:
+        - name: hf-cache
+          persistentVolumeClaim:
+            claimName: hf-cache-shared
+        - name: output
+          persistentVolumeClaim:
+            claimName: vamsin07-output

@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.env
+.DS_Store
+.idea/
+.vscode/
+*.egg-info/
+
+# Training artifacts (should land outside the repo, but ignore just in case)
+runs/
+out/
+output/
+checkpoints/
+wandb/
+
+# HuggingFace caches
+.cache/
+hf_cache/

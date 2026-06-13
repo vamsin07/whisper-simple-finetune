@@ -1,0 +1,80 @@
+# Nautilus k8s Job for one vanilla Whisper fine-tune.
+#
+# Usage:
+#   1. Edit the placeholders below (search for "EDIT ME"):
+#      - image tag (your registry path)
+#      - PVC names (HF cache + output)
+#      - W&B and HF secrets (kubectl create secret generic ...)
+#      - lang + fleurs_code + model size
+#   2. Submit:  kubectl apply -f nautilus/train-job.yaml
+#   3. Watch:   kubectl logs -f job/whisper-vft-spanish
+#   4. Clean:   kubectl delete job whisper-vft-spanish
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: whisper-vft-spanish       # EDIT ME — must be unique
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: trainer
+          # EDIT ME — your registry path
+          image: gitlab-registry.nautilus.optiputer.net/YOUR-GROUP/whisper-vanilla:latest
+          imagePullPolicy: Always
+
+          command: ["python", "src/train.py"]
+          args:
+            - "--lang=spanish"
+            - "--fleurs-code=es_419"
+            - "--whisper-lang=spanish"
+            - "--model=openai/whisper-base"        # or openai/whisper-large-v3
+            - "--output-dir=/output/spanish-base"
+            - "--max-epochs=3"
+            - "--seed=42"
+            - "--wandb-project=whisper-vanilla-spanish"
+
+          env:
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-credentials             # EDIT ME — kubectl create secret generic wandb-credentials --from-literal=api-key=...
+                  key: api-key
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-credentials                # EDIT ME — only needed if pulling a gated model
+                  key: token
+                  optional: true
+
+          resources:
+            requests:
+              memory: "16Gi"
+              cpu:    "4"
+              nvidia.com/gpu: "1"
+            limits:
+              memory: "24Gi"
+              cpu:    "8"
+              nvidia.com/gpu: "1"
+
+          volumeMounts:
+            - name: hf-cache
+              mountPath: /cache/hf
+            - name: output
+              mountPath: /output
+
+      volumes:
+        - name: hf-cache                              # shared, read-write — first pod populates, others reuse
+          persistentVolumeClaim:
+            claimName: hf-cache-shared                # EDIT ME — your PVC name
+        - name: output                                # per-user PVC for checkpoints + final metrics
+          persistentVolumeClaim:
+            claimName: vamsin07-output                # EDIT ME — your PVC name
+
+      # Pin to a GPU type that fits Whisper-base (any consumer-class works).
+      # For Whisper-large-v3, you'll need A100/H100 — add a nodeSelector.
+      # nodeSelector:
+      #   nvidia.com/gpu.product: NVIDIA-A100-SXM4-40GB
