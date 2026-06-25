@@ -110,7 +110,7 @@ def evaluate(model, tokenizer, loader, device, language):
             out = base(input_features=feats, labels=labels)
             losses.append(out.loss.item())
             gen = base.generate(feats, max_new_tokens=256, language=language,
-                                task="transcribe", num_beams=1)
+                                task="transcribe", num_beams=1, use_cache=True)
         for g, t in zip(gen, batch["texts"]):
             hyps.append(tokenizer.decode(g, skip_special_tokens=True).strip())
             refs.append(t)
@@ -203,6 +203,11 @@ def main():
     # Model + tokenizer
     logger.info(f"Loading {args.model}...")
     model = WhisperForConditionalGeneration.from_pretrained(args.model, torch_dtype=torch.float32)
+    # Disable KV cache for training. Whisper's default `use_cache=True` leaves a
+    # half-built cache after generate() during eval, which then fails on the next
+    # training-step backward with "trying to backward through the graph a second time".
+    # generate() will re-enable caching for itself via its own generation_config.
+    model.config.use_cache = False
     tokenizer = WhisperTokenizer.from_pretrained(args.model)
     feat = WhisperFeatureExtractor.from_pretrained(args.model)
     tokenizer.set_prefix_tokens(language=args.whisper_lang, task="transcribe")
