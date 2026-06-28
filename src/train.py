@@ -216,7 +216,12 @@ def main():
     if device == "cpu":
         logger.warning("No CUDA available; training on CPU will be very slow.")
     model.to(device)
-    model.gradient_checkpointing_enable()
+    # use_reentrant=False is the non-reentrant gradient checkpointing implementation;
+    # the reentrant default mishandles tensors that don't require grad and interacts
+    # badly with the model's internal cache state after a generate() call, which is
+    # exactly the path our eval at step N takes. With use_reentrant=False the same
+    # checkpointing works through the eval boundary cleanly.
+    model.gradient_checkpointing_enable(gradient_checkpointing_kwargs={"use_reentrant": False})
 
     # FLEURS data (via HuggingFace datasets — auto-downloads to HF_HOME on first run)
     logger.info(f"Loading FLEURS {args.fleurs_code} train + validation from HuggingFace datasets...")
